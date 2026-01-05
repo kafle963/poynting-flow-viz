@@ -7,6 +7,8 @@ const Index = () => {
   const [showElectric, setShowElectric] = useState(true);
   const [showMagnetic, setShowMagnetic] = useState(true);
   const [showPoynting, setShowPoynting] = useState(true);
+  const [isACMode, setIsACMode] = useState(false);
+  const [frequency, setFrequency] = useState(1);
 
   return (
     <div className="min-h-screen bg-background p-4 md:p-8">
@@ -16,7 +18,7 @@ const Index = () => {
             Electromagnetic Energy Flow
           </h1>
           <p className="text-muted-foreground">
-            Visualizing the Poynting vector in a simple DC circuit
+            Visualizing the Poynting vector in {isACMode ? "an AC" : "a DC"} circuit
           </p>
         </header>
 
@@ -24,9 +26,13 @@ const Index = () => {
           showElectric={showElectric}
           showMagnetic={showMagnetic}
           showPoynting={showPoynting}
+          isACMode={isACMode}
+          frequency={frequency}
           onToggleElectric={setShowElectric}
           onToggleMagnetic={setShowMagnetic}
           onTogglePoynting={setShowPoynting}
+          onToggleACMode={setIsACMode}
+          onFrequencyChange={setFrequency}
         />
 
         <div className="bg-card rounded-xl border border-border overflow-hidden" style={{ height: "500px" }}>
@@ -34,10 +40,12 @@ const Index = () => {
             showElectric={showElectric}
             showMagnetic={showMagnetic}
             showPoynting={showPoynting}
+            isACMode={isACMode}
+            frequency={frequency}
           />
         </div>
 
-        <InfoPanel />
+        <InfoPanel isACMode={isACMode} />
       </div>
     </div>
   );
