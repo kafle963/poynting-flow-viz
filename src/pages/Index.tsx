@@ -1,11 +1,43 @@
-// Update this page (the content is just a fallback if you fail to update the page)
+import { useState } from "react";
+import { CircuitVisualization } from "@/components/CircuitVisualization";
+import { ControlPanel } from "@/components/ControlPanel";
+import { InfoPanel } from "@/components/InfoPanel";
 
 const Index = () => {
+  const [showElectric, setShowElectric] = useState(true);
+  const [showMagnetic, setShowMagnetic] = useState(true);
+  const [showPoynting, setShowPoynting] = useState(true);
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background">
-      <div className="text-center">
-        <h1 className="mb-4 text-4xl font-bold">Welcome to Your Blank App</h1>
-        <p className="text-xl text-muted-foreground">Start building your amazing project here!</p>
+    <div className="min-h-screen bg-background p-4 md:p-8">
+      <div className="max-w-6xl mx-auto space-y-6">
+        <header className="text-center space-y-2">
+          <h1 className="text-3xl md:text-4xl font-bold text-foreground">
+            Electromagnetic Energy Flow
+          </h1>
+          <p className="text-muted-foreground">
+            Visualizing the Poynting vector in a simple DC circuit
+          </p>
+        </header>
+
+        <ControlPanel
+          showElectric={showElectric}
+          showMagnetic={showMagnetic}
+          showPoynting={showPoynting}
+          onToggleElectric={setShowElectric}
+          onToggleMagnetic={setShowMagnetic}
+          onTogglePoynting={setShowPoynting}
+        />
+
+        <div className="bg-card rounded-xl border border-border overflow-hidden" style={{ height: "500px" }}>
+          <CircuitVisualization
+            showElectric={showElectric}
+            showMagnetic={showMagnetic}
+            showPoynting={showPoynting}
+          />
+        </div>
+
+        <InfoPanel />
       </div>
     </div>
   );
