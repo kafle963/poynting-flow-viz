@@ -6,18 +6,26 @@ interface Props {
   showPoynting: boolean;
   isACMode: boolean;
   frequency: number;
+  voltage: number;
+  resistance: number;
 }
 
-export const CircuitVisualization = ({ 
-  showElectric, 
-  showMagnetic, 
+export const CircuitVisualization = ({
+  showElectric,
+  showMagnetic,
   showPoynting,
   isACMode,
-  frequency 
+  frequency,
+  voltage,
+  resistance
 }: Props) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const animationRef = useRef<number>(0);
   const [time, setTime] = useState(0);
+
+  // Derived physics values
+  const current = voltage / resistance; // I = V/R
+  const power = voltage * current;      // P = VI
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -64,8 +72,8 @@ export const CircuitVisualization = ({
     ctx.clearRect(0, 0, width, height);
 
     // Circuit dimensions
-    const circuitWidth = width * 0.6;
-    const circuitHeight = height * 0.4;
+    const circuitWidth = width * 0.7;
+    const circuitHeight = height * 0.5;
     const left = centerX - circuitWidth / 2;
     const right = centerX + circuitWidth / 2;
     const top = centerY - circuitHeight / 2;
@@ -73,481 +81,487 @@ export const CircuitVisualization = ({
 
     // Calculate AC phase (oscillates between -1 and 1)
     const acPhase = isACMode ? Math.sin(time * frequency * Math.PI * 2) : 1;
-    const absPhase = Math.abs(acPhase);
+    const instantaneousCurrent = current * acPhase;
+    const instantaneousPower = isACMode ? power * acPhase * acPhase : power;
 
-    // Draw circuit wires
-    ctx.strokeStyle = "hsl(220, 10%, 70%)";
-    ctx.lineWidth = 4;
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
+    // --- Draw Circuit Components ---
 
-    // Top wire
-    ctx.beginPath();
-    ctx.moveTo(left + 40, top);
-    ctx.lineTo(right - 40, top);
-    ctx.stroke();
+    // Draw wires with current flow effect
+    drawWires(ctx, left, right, top, bottom);
 
-    // Bottom wire
-    ctx.beginPath();
-    ctx.moveTo(left + 40, bottom);
-    ctx.lineTo(right - 40, bottom);
-    ctx.stroke();
-
-    // Left wire (source side)
-    ctx.beginPath();
-    ctx.moveTo(left, top + 30);
-    ctx.lineTo(left, bottom - 30);
-    ctx.stroke();
-
-    // Right wire (resistor side)
-    ctx.beginPath();
-    ctx.moveTo(right, top + 50);
-    ctx.lineTo(right, bottom - 50);
-    ctx.stroke();
+    // Draw Electron Flow (Current)
+    const driftSpeed = instantaneousCurrent * 0.5;
+    drawElectrons(ctx, left, right, top, bottom, time, driftSpeed);
 
     // Draw source (battery or AC)
     if (isACMode) {
-      drawACSource(ctx, left, centerY, 60, time, frequency);
+      drawACSource(ctx, left, centerY, 60, time, frequency, voltage);
     } else {
-      drawBattery(ctx, left, centerY, 60);
+      drawBattery(ctx, left, centerY, 60, voltage);
     }
 
-    // Draw resistor
-    drawResistor(ctx, right, centerY, 80);
+    // Draw Load (Light Bulb)
+    drawLightBulb(ctx, right, centerY, 80, resistance, instantaneousPower);
 
-    // Draw corner connections
-    ctx.strokeStyle = "hsl(220, 10%, 70%)";
-    ctx.lineWidth = 4;
-    
-    // Top-left corner
-    ctx.beginPath();
-    ctx.arc(left + 40, top + 30, 30, Math.PI, 1.5 * Math.PI);
-    ctx.stroke();
-
-    // Top-right corner
-    ctx.beginPath();
-    ctx.arc(right - 40, top + 50, 50, 1.5 * Math.PI, 0);
-    ctx.stroke();
-
-    // Bottom-left corner
-    ctx.beginPath();
-    ctx.arc(left + 40, bottom - 30, 30, 0.5 * Math.PI, Math.PI);
-    ctx.stroke();
-
-    // Bottom-right corner
-    ctx.beginPath();
-    ctx.arc(right - 40, bottom - 50, 50, 0, 0.5 * Math.PI);
-    ctx.stroke();
+    // Draw connecting corners
+    drawCorners(ctx, left, right, top, bottom);
 
     // Draw phase indicator for AC mode
     if (isACMode) {
       drawPhaseIndicator(ctx, width, height, acPhase, time, frequency);
     }
 
-    // Draw Electric Field (E-field) - radial from wire surfaces
+    // --- Draw Fields ---
+
+    // Draw Electric Field (E-field) - scales with Voltage
     if (showElectric) {
-      drawElectricField(ctx, width, height, left, right, top, bottom, time, acPhase, absPhase);
+      drawElectricField(ctx, left, right, top, bottom, time, acPhase, voltage);
     }
 
-    // Draw Magnetic Field (B-field) - circular around wires
+    // Draw Magnetic Field (B-field) - scales with Current
     if (showMagnetic) {
-      drawMagneticField(ctx, width, height, left, right, top, bottom, time, acPhase, absPhase);
+      drawMagneticField(ctx, left, right, top, bottom, time, acPhase, instantaneousCurrent);
     }
 
-    // Draw Poynting Vectors (S = E × H)
+    // Draw Poynting Vectors (S = E × H) - scales with Power
     if (showPoynting) {
-      drawPoyntingVectors(ctx, width, height, left, right, top, bottom, time, acPhase, absPhase, isACMode);
+      drawPoyntingFlow(ctx, left, right, top, bottom, time, instantaneousPower, isACMode);
     }
 
-  }, [time, showElectric, showMagnetic, showPoynting, isACMode, frequency]);
+  }, [time, showElectric, showMagnetic, showPoynting, isACMode, frequency, voltage, resistance, current, power]);
 
   return (
     <canvas
       ref={canvasRef}
-      className="w-full h-full"
+      className="w-full h-full bg-slate-950"
       style={{ display: "block" }}
     />
   );
 };
 
-function drawBattery(ctx: CanvasRenderingContext2D, x: number, y: number, size: number) {
-  ctx.strokeStyle = "hsl(220, 10%, 70%)";
-  ctx.lineWidth = 3;
+function drawWires(ctx: CanvasRenderingContext2D, left: number, right: number, top: number, bottom: number) {
+  ctx.strokeStyle = "hsl(220, 10%, 40%)";
+  ctx.lineWidth = 8;
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
 
-  // Positive terminal (longer line)
+  // Outer frame
   ctx.beginPath();
-  ctx.moveTo(x - 15, y - size / 3);
-  ctx.lineTo(x + 15, y - size / 3);
+  ctx.moveTo(left + 30, top);
+  ctx.lineTo(right - 30, top);
   ctx.stroke();
 
-  // Negative terminal (shorter line)
-  ctx.lineWidth = 6;
   ctx.beginPath();
-  ctx.moveTo(x - 8, y + size / 3);
-  ctx.lineTo(x + 8, y + size / 3);
+  ctx.moveTo(left + 30, bottom);
+  ctx.lineTo(right - 30, bottom);
   ctx.stroke();
 
-  // Labels
-  ctx.fillStyle = "hsl(45, 100%, 60%)";
-  ctx.font = "bold 16px Inter, sans-serif";
-  ctx.textAlign = "center";
-  ctx.fillText("+", x, y - size / 3 - 10);
-  ctx.fillText("−", x, y + size / 3 + 20);
+  ctx.beginPath();
+  ctx.moveTo(left, top + 30);
+  ctx.lineTo(left, bottom - 30);
+  ctx.stroke();
 
-  // Battery body outline
-  ctx.strokeStyle = "hsl(220, 10%, 50%)";
-  ctx.lineWidth = 2;
-  ctx.strokeRect(x - 20, y - size / 2 + 10, 40, size - 20);
+  ctx.beginPath();
+  ctx.moveTo(right, top + 30);
+  ctx.lineTo(right, bottom - 30);
+  ctx.stroke();
 }
 
-function drawResistor(ctx: CanvasRenderingContext2D, x: number, y: number, size: number) {
-  ctx.strokeStyle = "hsl(220, 10%, 70%)";
-  ctx.lineWidth = 3;
+function drawCorners(ctx: CanvasRenderingContext2D, left: number, right: number, top: number, bottom: number) {
+  ctx.strokeStyle = "hsl(220, 10%, 40%)";
+  ctx.lineWidth = 8;
 
-  const zigzags = 5;
-  const amplitude = 12;
-  const stepY = size / zigzags;
+  ctx.beginPath();
+  ctx.arc(left + 30, top + 30, 30, Math.PI, 1.5 * Math.PI);
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.arc(right - 30, top + 30, 30, 1.5 * Math.PI, 0);
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.arc(left + 30, bottom - 30, 30, 0.5 * Math.PI, Math.PI);
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.arc(right - 30, bottom - 30, 30, 0, 0.5 * Math.PI);
+  ctx.stroke();
+}
+
+function drawElectrons(
+  ctx: CanvasRenderingContext2D,
+  left: number,
+  right: number,
+  top: number,
+  bottom: number,
+  time: number,
+  speed: number
+) {
+  const electronSpeed = -speed;
+  const numElectrons = 40;
+
+  ctx.fillStyle = "hsl(190, 100%, 70%)";
+  ctx.shadowColor = "hsl(190, 100%, 50%)";
+  ctx.shadowBlur = 4;
+
+  for (let i = 0; i < numElectrons; i++) {
+    let pos = (i / numElectrons + time * electronSpeed * 0.1) % 1;
+    if (pos < 0) pos += 1;
+
+    const perimeter = 2 * (right - left) + 2 * (bottom - top);
+    const distanceInfo = pos * perimeter;
+
+    let x, y;
+
+    if (distanceInfo < (right - left)) {
+      // Top edge
+      x = left + distanceInfo;
+      y = top;
+    } else if (distanceInfo < (right - left) + (bottom - top)) {
+      // Right edge
+      x = right;
+      y = top + (distanceInfo - (right - left));
+    } else if (distanceInfo < 2 * (right - left) + (bottom - top)) {
+      // Bottom edge
+      x = right - (distanceInfo - ((right - left) + (bottom - top)));
+      y = bottom;
+    } else {
+      // Left edge
+      x = left;
+      y = bottom - (distanceInfo - (2 * (right - left) + (bottom - top)));
+    }
+
+    ctx.beginPath();
+    ctx.arc(x, y, 3, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.shadowBlur = 0;
+}
+
+function drawBattery(ctx: CanvasRenderingContext2D, x: number, y: number, size: number, voltage: number) {
+  ctx.strokeStyle = "hsl(220, 10%, 80%)";
+  ctx.lineWidth = 3;
 
   ctx.beginPath();
   ctx.moveTo(x, y - size / 2);
+  ctx.lineTo(x, y - size / 3);
+  ctx.moveTo(x, y + size / 2);
+  ctx.lineTo(x, y + size / 3);
+  ctx.stroke();
 
-  for (let i = 0; i < zigzags; i++) {
-    const yPos = y - size / 2 + stepY * (i + 0.5);
-    const xOffset = i % 2 === 0 ? amplitude : -amplitude;
-    ctx.lineTo(x + xOffset, yPos);
+  ctx.beginPath();
+  ctx.moveTo(x - 20, y - size / 3);
+  ctx.lineTo(x + 20, y - size / 3);
+  ctx.stroke();
+
+  ctx.lineWidth = 6;
+  ctx.beginPath();
+  ctx.moveTo(x - 10, y + size / 3);
+  ctx.lineTo(x + 10, y + size / 3);
+  ctx.stroke();
+
+  ctx.fillStyle = "hsl(45, 100%, 60%)";
+  ctx.font = "bold 16px Inter, sans-serif";
+  ctx.textAlign = "right";
+  ctx.fillText(`${voltage}V`, x - 25, y + 5);
+}
+
+function drawACSource(ctx: CanvasRenderingContext2D, x: number, y: number, size: number, time: number, frequency: number, voltage: number) {
+  ctx.strokeStyle = "hsl(220, 10%, 80%)";
+  ctx.lineWidth = 2;
+
+  ctx.beginPath();
+  ctx.moveTo(x, y - size / 2 - 10);
+  ctx.lineTo(x, y + size / 2 + 10);
+  ctx.stroke();
+
+  ctx.fillStyle = "hsl(220, 20%, 10%)";
+  ctx.beginPath();
+  ctx.arc(x, y, size / 2, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.strokeStyle = "hsl(45, 100%, 60%)";
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+
+  const waveWidth = size * 0.6;
+  const waveHeight = size * 0.25;
+  const phase = time * frequency * Math.PI * 2;
+
+  for (let i = 0; i <= 20; i++) {
+    const px = x - waveWidth / 2 + (i / 20) * waveWidth;
+    const py = y + Math.sin((i / 20) * Math.PI * 2 + phase) * waveHeight;
+    if (i === 0) ctx.moveTo(px, py);
+    else ctx.lineTo(px, py);
   }
+  ctx.stroke();
+
+  ctx.fillStyle = "hsl(45, 100%, 60%)";
+  ctx.font = "bold 14px Inter, sans-serif";
+  ctx.textAlign = "center";
+  ctx.fillText(`${voltage}V`, x, y + size / 2 + 20);
+}
+
+function drawLightBulb(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  size: number,
+  resistance: number,
+  power: number
+) {
+  const glowIntensity = Math.min(Math.abs(power) / 50, 1);
+  const brightness = 20 + glowIntensity * 80;
+
+  // Bulb Glass (Background Glow)
+  ctx.shadowBlur = glowIntensity * 60;
+  ctx.shadowColor = `hsla(50, 100%, 60%, ${glowIntensity})`;
+  ctx.fillStyle = `hsla(50, 100%, ${brightness}%, 0.1)`;
+  ctx.strokeStyle = `hsla(50, 100%, ${brightness}%, 0.5)`;
+  ctx.lineWidth = 1;
+
+  ctx.beginPath();
+  ctx.arc(x, y - 5, 30, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.shadowBlur = 0;
+
+  // Bulb Base
+  ctx.fillStyle = "#555";
+  ctx.fillRect(x - 12, y + 20, 24, 25);
+  // Threads
+  ctx.strokeStyle = "#888";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(x - 12, y + 25); ctx.lineTo(x + 12, y + 25);
+  ctx.moveTo(x - 12, y + 32); ctx.lineTo(x + 12, y + 32);
+  ctx.moveTo(x - 12, y + 39); ctx.lineTo(x + 12, y + 39);
+  ctx.stroke();
+
+  // Filament Support
+  ctx.strokeStyle = "#aaa";
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(x - 8, y + 20); ctx.lineTo(x - 5, y);
+  ctx.moveTo(x + 8, y + 20); ctx.lineTo(x + 5, y);
+  ctx.stroke();
+
+  // Glowing Filament
+  ctx.strokeStyle = `hsl(40, 100%, ${50 + glowIntensity * 50}%)`;
+  ctx.lineWidth = 2 + glowIntensity * 2;
+  ctx.shadowBlur = glowIntensity * 20;
+  ctx.shadowColor = "hsl(40, 100%, 50%)";
+
+  ctx.beginPath();
+  ctx.moveTo(x - 5, y);
+  ctx.lineTo(x - 8, y - 10);
+  ctx.lineTo(x - 4, y - 5);
+  ctx.lineTo(x, y - 12);
+  ctx.lineTo(x + 4, y - 5);
+  ctx.lineTo(x + 8, y - 10);
+  ctx.lineTo(x + 5, y);
+  ctx.stroke();
+
+  ctx.shadowBlur = 0;
+
+  // Connections w/ circuit
+  ctx.strokeStyle = "hsl(220, 10%, 80%)";
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.moveTo(x, y - size / 2);
+  ctx.lineTo(x, y - 35); // Top wire
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.moveTo(x, y + 45); // Bottom wire
   ctx.lineTo(x, y + size / 2);
   ctx.stroke();
 
   // Label
   ctx.fillStyle = "hsl(340, 85%, 60%)";
-  ctx.font = "14px Inter, sans-serif";
-  ctx.textAlign = "left";
-  ctx.fillText("R (Load)", x + 25, y + 5);
-}
-
-function drawACSource(ctx: CanvasRenderingContext2D, x: number, y: number, size: number, time: number, frequency: number) {
-  // Draw circle
-  ctx.strokeStyle = "hsl(220, 10%, 70%)";
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.arc(x, y, size / 2, 0, Math.PI * 2);
-  ctx.stroke();
-
-  // Draw sine wave inside
-  ctx.strokeStyle = "hsl(45, 100%, 60%)";
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  
-  const waveWidth = size * 0.7;
-  const waveHeight = size * 0.3;
-  const phase = time * frequency * Math.PI * 2;
-  
-  for (let i = 0; i <= 20; i++) {
-    const px = x - waveWidth / 2 + (i / 20) * waveWidth;
-    const py = y + Math.sin((i / 20) * Math.PI * 2 + phase) * waveHeight / 2;
-    if (i === 0) ctx.moveTo(px, py);
-    else ctx.lineTo(px, py);
-  }
-  ctx.stroke();
-
-  // Label
-  ctx.fillStyle = "hsl(45, 100%, 60%)";
   ctx.font = "bold 14px Inter, sans-serif";
   ctx.textAlign = "center";
-  ctx.fillText("AC", x, y + size / 2 + 20);
+  ctx.fillText(`${resistance}Ω`, x, y + 65);
 }
 
 function drawPhaseIndicator(ctx: CanvasRenderingContext2D, width: number, height: number, phase: number, time: number, frequency: number) {
-  const indicatorX = width - 120;
+  const indicatorX = width - 80;
   const indicatorY = 60;
-  const indicatorWidth = 100;
-  const indicatorHeight = 50;
-
-  // Background
-  ctx.fillStyle = "hsla(220, 20%, 15%, 0.9)";
-  ctx.fillRect(indicatorX - 10, indicatorY - 30, indicatorWidth + 20, indicatorHeight + 40);
-  ctx.strokeStyle = "hsl(220, 15%, 30%)";
-  ctx.lineWidth = 1;
-  ctx.strokeRect(indicatorX - 10, indicatorY - 30, indicatorWidth + 20, indicatorHeight + 40);
-
-  // Label
+  // Kept minimal
   ctx.fillStyle = "hsl(210, 20%, 70%)";
   ctx.font = "12px Inter, sans-serif";
-  ctx.textAlign = "center";
-  ctx.fillText("Current Phase", indicatorX + indicatorWidth / 2, indicatorY - 15);
+  ctx.fillText("Phase", indicatorX, indicatorY - 20);
 
-  // Draw sine wave
-  ctx.strokeStyle = "hsl(45, 100%, 60%)";
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  
-  for (let i = 0; i <= indicatorWidth; i++) {
-    const px = indicatorX + i;
-    const py = indicatorY + indicatorHeight / 2 + Math.sin((i / indicatorWidth) * Math.PI * 4 - time * frequency * Math.PI * 2) * (indicatorHeight / 2 - 5);
-    if (i === 0) ctx.moveTo(px, py);
-    else ctx.lineTo(px, py);
-  }
-  ctx.stroke();
+  // Rotating phaser or simple bar? Let's do a simple bar
+  ctx.strokeStyle = "hsl(220, 20%, 30%)";
+  ctx.strokeRect(indicatorX - 30, indicatorY - 10, 60, 20);
 
-  // Draw current position marker
-  const markerX = indicatorX + (indicatorWidth / 2);
-  const markerY = indicatorY + indicatorHeight / 2 - phase * (indicatorHeight / 2 - 5);
-  
   ctx.fillStyle = "hsl(45, 100%, 60%)";
-  ctx.beginPath();
-  ctx.arc(markerX, markerY, 5, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Phase value
-  ctx.fillStyle = phase >= 0 ? "hsl(120, 70%, 50%)" : "hsl(0, 70%, 50%)";
-  ctx.font = "bold 14px Inter, sans-serif";
-  ctx.fillText(`${(phase * 100).toFixed(0)}%`, indicatorX + indicatorWidth / 2, indicatorY + indicatorHeight + 15);
+  const w = phase * 30;
+  ctx.fillRect(indicatorX, indicatorY - 10, w, 20);
 }
 
 function drawElectricField(
   ctx: CanvasRenderingContext2D,
-  width: number,
-  height: number,
   left: number,
   right: number,
   top: number,
   bottom: number,
   time: number,
   acPhase: number,
-  absPhase: number
+  voltage: number
 ) {
-  ctx.lineWidth = 1.5;
-  ctx.globalAlpha = 0.3 + absPhase * 0.5;
+  const intensity = Math.abs(voltage) / 10;
+  const direction = acPhase >= 0 ? 1 : -1;
+  const eColor = direction > 0 ? "hsl(200, 100%, 60%)" : "hsl(200, 100%, 40%)";
 
-  // Electric field direction depends on phase
-  const direction1 = acPhase >= 0 ? "up" : "down";
-  const direction2 = acPhase >= 0 ? "down" : "up";
+  ctx.strokeStyle = eColor;
+  ctx.lineWidth = 1 + intensity;
+  ctx.globalAlpha = 0.3 + Math.min(intensity * 0.1, 0.4);
 
-  // Set color based on phase direction
-  const electricColor = acPhase >= 0 ? "hsl(200, 100%, 60%)" : "hsl(200, 100%, 40%)";
-  ctx.strokeStyle = electricColor;
-  ctx.fillStyle = electricColor;
-
-  // Top wire - field lines
-  for (let x = left + 60; x < right - 60; x += 40) {
-    const offset = Math.sin(time * 2 + x * 0.05) * 3;
-    const lineLength = 15 + absPhase * 15;
-    drawFieldLine(ctx, x, top - 15 + offset, x, top - 15 - lineLength + offset, direction1);
-    drawFieldLine(ctx, x, top + 15 - offset, x, top + 15 + lineLength - offset, direction2);
+  const spacing = 40;
+  for (let x = left + 40; x < right - 40; x += spacing) {
+    drawFieldLine(ctx, x, top, x, top - 40 * Math.abs(acPhase) * (voltage / 5), direction === 1 ? 'up' : 'down');
+    drawFieldLine(ctx, x, bottom, x, bottom + 40 * Math.abs(acPhase) * (voltage / 5), direction === 1 ? 'down' : 'up');
   }
+  ctx.globalAlpha = 1.0;
+}
 
-  // Bottom wire - field lines
-  for (let x = left + 60; x < right - 60; x += 40) {
-    const offset = Math.sin(time * 2 + x * 0.05) * 3;
-    const lineLength = 15 + absPhase * 15;
-    drawFieldLine(ctx, x, bottom - 15 + offset, x, bottom - 15 - lineLength + offset, direction1);
-    drawFieldLine(ctx, x, bottom + 15 - offset, x, bottom + 15 + lineLength - offset, direction2);
+function drawFieldLine(ctx: CanvasRenderingContext2D, x1: number, y1: number, x2: number, y2: number, dir: 'up' | 'down') {
+  ctx.beginPath();
+  ctx.moveTo(x1, y1);
+  ctx.lineTo(x2, y2);
+  ctx.stroke();
+  const headSize = 6;
+  if (dir === 'up') {
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - headSize / 2, y2 + headSize);
+    ctx.lineTo(x2 + headSize / 2, y2 + headSize);
+    ctx.fill();
+  } else {
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - headSize / 2, y2 - headSize);
+    ctx.lineTo(x2 + headSize / 2, y2 - headSize);
+    ctx.fill();
   }
-
-  ctx.globalAlpha = 1;
 }
 
 function drawMagneticField(
   ctx: CanvasRenderingContext2D,
-  width: number,
-  height: number,
   left: number,
   right: number,
   top: number,
   bottom: number,
   time: number,
   acPhase: number,
-  absPhase: number
+  instantaneousCurrent: number
 ) {
-  ctx.globalAlpha = 0.3 + absPhase * 0.5;
-  ctx.lineWidth = 1.5;
+  const intensity = Math.abs(instantaneousCurrent);
+  const color = "hsl(340, 85%, 60%)";
 
-  const magneticColor = acPhase >= 0 ? "hsl(340, 85%, 60%)" : "hsl(340, 85%, 40%)";
-  ctx.strokeStyle = magneticColor;
+  ctx.strokeStyle = color;
+  ctx.fillStyle = color;
+  ctx.textAlign = "center";
+  ctx.font = "bold 16px sans-serif";
 
-  // Magnetic field symbols swap based on current direction
-  const topSymbol = acPhase >= 0 ? "×" : "•";
-  const bottomSymbol = acPhase >= 0 ? "•" : "×";
+  const isClockwise = instantaneousCurrent > 0;
+  const topSymbol = isClockwise ? "•" : "×";
+  const bottomSymbol = isClockwise ? "×" : "•";
 
-  // Top wire
-  for (let x = left + 80; x < right - 80; x += 60) {
-    const radius = 20 + absPhase * 10 + Math.sin(time * 3 + x * 0.1) * 3;
-    
-    ctx.beginPath();
-    ctx.arc(x, top, radius, 0.2 * Math.PI, 0.8 * Math.PI);
-    ctx.stroke();
-    
-    ctx.fillStyle = magneticColor;
-    ctx.font = `${14 + absPhase * 4}px sans-serif`;
-    ctx.textAlign = "center";
-    ctx.fillText(topSymbol, x, top - radius - 5);
-    ctx.fillText(bottomSymbol, x, top + radius + 12);
+  const radius = 15 + Math.min(intensity * 2, 20);
+
+  for (let x = left + 60; x < right - 60; x += 60) {
+    ctx.fillText(topSymbol, x, top - 25);
+    ctx.beginPath(); ctx.arc(x, top, radius, Math.PI, 0); ctx.stroke();
   }
-
-  // Bottom wire
-  for (let x = left + 80; x < right - 80; x += 60) {
-    const radius = 20 + absPhase * 10 + Math.sin(time * 3 + x * 0.1) * 3;
-    
-    ctx.beginPath();
-    ctx.arc(x, bottom, radius, 1.2 * Math.PI, 1.8 * Math.PI);
-    ctx.stroke();
-    
-    ctx.fillStyle = magneticColor;
-    ctx.font = `${14 + absPhase * 4}px sans-serif`;
-    ctx.fillText(bottomSymbol, x, bottom - radius - 5);
-    ctx.fillText(topSymbol, x, bottom + radius + 12);
+  const bottomWireTopSym = isClockwise ? "×" : "•";
+  for (let x = left + 60; x < right - 60; x += 60) {
+    ctx.fillText(bottomWireTopSym, x, bottom - 25);
+    ctx.beginPath(); ctx.arc(x, bottom, radius, Math.PI, 0); ctx.stroke();
   }
-
-  ctx.globalAlpha = 1;
 }
 
-function drawPoyntingVectors(
+function drawPoyntingFlow(
   ctx: CanvasRenderingContext2D,
-  width: number,
-  height: number,
   left: number,
   right: number,
   top: number,
   bottom: number,
   time: number,
-  acPhase: number,
-  absPhase: number,
+  instantaneousPower: number,
   isACMode: boolean
 ) {
-  ctx.lineWidth = 2.5;
-  ctx.globalAlpha = 0.5 + absPhase * 0.4;
+  const power = Math.abs(instantaneousPower);
+  const color = "hsl(45, 100%, 60%)";
+  ctx.fillStyle = color;
+  ctx.shadowColor = color;
+  ctx.shadowBlur = 10;
 
-  // In AC mode, Poynting vector ALWAYS points toward load (energy dissipation)
-  // because S = E × H, and when both E and H flip, S stays the same direction!
-  // However, the magnitude oscillates with |sin(ωt)|²
-  
-  const poyntingColor = "hsl(45, 100%, 55%)";
-  ctx.strokeStyle = poyntingColor;
-  ctx.fillStyle = poyntingColor;
-
-  // Arrow size scales with instantaneous power (|phase|² for AC)
-  const powerFactor = isACMode ? absPhase * absPhase : 1;
-  const arrowScale = 0.5 + powerFactor * 0.5;
-  
-  // Top wire - energy flowing rightward (from source to resistor)
-  const numArrows = 6;
-  for (let i = 0; i < numArrows; i++) {
-    const progress = ((time * 0.5 * arrowScale + i / numArrows) % 1);
-    const x = left + 60 + progress * (right - left - 120);
-    const y = top - 35;
-    const arrowLen = 12 * arrowScale;
-    
-    drawArrow(ctx, x - arrowLen, y, x + arrowLen, y, 6 + powerFactor * 3);
-  }
-
-  // Bottom wire - energy also flowing toward resistor
-  for (let i = 0; i < numArrows; i++) {
-    const progress = ((time * 0.5 * arrowScale + i / numArrows) % 1);
-    const x = left + 60 + progress * (right - left - 120);
-    const y = bottom + 35;
-    const arrowLen = 12 * arrowScale;
-    
-    drawArrow(ctx, x - arrowLen, y, x + arrowLen, y, 6 + powerFactor * 3);
-  }
-
-  // Energy converging at resistor - scales with power
+  const particleCount = Math.min(Math.floor(power * 3), 100);
+  const centerX = (left + right) / 2;
   const centerY = (top + bottom) / 2;
-  if (powerFactor > 0.1) {
-    for (let i = 0; i < 4; i++) {
-      const angle = (time + i * 0.5) * 2;
-      const radius = 50 + Math.sin(angle) * 10 * powerFactor;
-      const targetX = right;
-      const targetY = centerY;
-      
-      const startX = targetX + Math.cos(Math.PI + i * 0.4 - 0.6) * radius;
-      const startY = targetY + Math.sin(Math.PI + i * 0.4 - 0.6) * radius * 0.8;
-      
-      ctx.globalAlpha = powerFactor * 0.8;
-      drawArrow(ctx, startX, startY, targetX + 25, targetY + (i - 1.5) * 15, 5 + powerFactor * 3);
-    }
-  }
+  const width = right - left;
+  const height = bottom - top;
 
-  // Energy emanating from source - scales with power
-  if (powerFactor > 0.1) {
-    for (let i = 0; i < 4; i++) {
-      const angle = (time + i * 0.5) * 2;
-      const radius = 40 + Math.sin(angle) * 8 * powerFactor;
-      const sourceX = left;
-      const sourceY = centerY;
-      
-      const endX = sourceX - Math.cos(i * 0.4 - 0.6) * radius;
-      const endY = sourceY + Math.sin(i * 0.4 - 0.6) * radius * 0.6;
-      
-      ctx.globalAlpha = powerFactor * 0.8;
-      drawArrow(ctx, sourceX - 25, sourceY + (i - 1.5) * 12, endX, endY, 5 + powerFactor * 3);
-    }
-  }
+  for (let i = 0; i < particleCount; i++) {
+    const seed = i * 13.0;
+    const speed = 1.0 + (i % 3) * 0.5;
+    const progress = (time * speed + seed / 100) % 1.5;
 
-  ctx.globalAlpha = 1;
-}
+    if (progress > 1) continue;
 
-function drawFieldLine(
-  ctx: CanvasRenderingContext2D,
-  x1: number,
-  y1: number,
-  x2: number,
-  y2: number,
-  direction: "up" | "down"
-) {
-  ctx.beginPath();
-  ctx.moveTo(x1, y1);
-  ctx.lineTo(x2, y2);
-  ctx.stroke();
+    const yOffset = Math.sin(seed) * (height * 0.3);
+    const x = left + progress * width;
+    const y = centerY + yOffset;
 
-  // Draw arrow head
-  const arrowSize = 5;
-  const midX = (x1 + x2) / 2;
-  const midY = (y1 + y2) / 2;
-  
-  if (direction === "up") {
+    const size = 2 + (power / 50);
+    ctx.globalAlpha = 1.0 - Math.abs(yOffset) / (height * 0.4);
+
     ctx.beginPath();
-    ctx.moveTo(midX, midY - 5);
-    ctx.lineTo(midX - arrowSize, midY + 3);
-    ctx.lineTo(midX + arrowSize, midY + 3);
-    ctx.closePath();
-    ctx.fill();
-  } else {
-    ctx.beginPath();
-    ctx.moveTo(midX, midY + 5);
-    ctx.lineTo(midX - arrowSize, midY - 3);
-    ctx.lineTo(midX + arrowSize, midY - 3);
-    ctx.closePath();
+    ctx.arc(x, y, size, 0, Math.PI * 2);
     ctx.fill();
   }
+
+  // Explicit Direction Arrows centered in the flow
+  ctx.shadowBlur = 0;
+  ctx.globalAlpha = 0.8;
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 3;
+  ctx.fillStyle = color;
+
+  // Draw 3 distinct arrows along the center path to clearly show direction
+  const arrowPositions = [0.25, 0.5, 0.75];
+  arrowPositions.forEach(pos => {
+    const ax = left + pos * width;
+    const ay = centerY;
+    // Draw Arrow
+    drawArrow(ctx, ax - 15, ay, ax + 15, ay, 10);
+
+    // Label "S" above the middle one
+    if (pos === 0.5) {
+      ctx.font = "bold italic 20px Times New Roman";
+      ctx.textAlign = "center";
+      ctx.fillText("S", ax, ay - 25);
+    }
+  });
+
+  ctx.globalAlpha = 1.0;
 }
 
-function drawArrow(
-  ctx: CanvasRenderingContext2D,
-  x1: number,
-  y1: number,
-  x2: number,
-  y2: number,
-  headSize: number
-) {
+function drawArrow(ctx: CanvasRenderingContext2D, x1: number, y1: number, x2: number, y2: number, headSize: number) {
   const angle = Math.atan2(y2 - y1, x2 - x1);
-  
   ctx.beginPath();
   ctx.moveTo(x1, y1);
   ctx.lineTo(x2, y2);
   ctx.stroke();
 
-  // Arrow head
   ctx.beginPath();
   ctx.moveTo(x2, y2);
-  ctx.lineTo(
-    x2 - headSize * Math.cos(angle - Math.PI / 6),
-    y2 - headSize * Math.sin(angle - Math.PI / 6)
-  );
-  ctx.lineTo(
-    x2 - headSize * Math.cos(angle + Math.PI / 6),
-    y2 - headSize * Math.sin(angle + Math.PI / 6)
-  );
-  ctx.closePath();
+  ctx.lineTo(x2 - headSize * Math.cos(angle - Math.PI / 6), y2 - headSize * Math.sin(angle - Math.PI / 6));
+  ctx.lineTo(x2 - headSize * Math.cos(angle + Math.PI / 6), y2 - headSize * Math.sin(angle + Math.PI / 6));
   ctx.fill();
 }

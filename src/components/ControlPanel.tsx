@@ -9,11 +9,15 @@ interface Props {
   showPoynting: boolean;
   isACMode: boolean;
   frequency: number;
+  voltage: number;
+  resistance: number;
   onToggleElectric: (value: boolean) => void;
   onToggleMagnetic: (value: boolean) => void;
   onTogglePoynting: (value: boolean) => void;
   onToggleACMode: (value: boolean) => void;
   onFrequencyChange: (value: number) => void;
+  onVoltageChange: (value: number) => void;
+  onResistanceChange: (value: number) => void;
 }
 
 export const ControlPanel = ({
@@ -22,59 +26,91 @@ export const ControlPanel = ({
   showPoynting,
   isACMode,
   frequency,
+  voltage,
+  resistance,
   onToggleElectric,
   onToggleMagnetic,
   onTogglePoynting,
   onToggleACMode,
   onFrequencyChange,
+  onVoltageChange,
+  onResistanceChange,
 }: Props) => {
   return (
     <div className="space-y-4 p-4 bg-card rounded-lg border border-border">
-      {/* AC/DC Mode Toggle */}
-      <div className="flex flex-wrap items-center justify-between gap-4 pb-3 border-b border-border">
-        <div className="flex items-center gap-4">
+      {/* Circuit Parameters */}
+      <div className="flex flex-wrap items-center justify-between gap-6 pb-3 border-b border-border">
+        {/* AC/DC Toggle */}
+        <div className="flex items-center gap-2">
           <button
             onClick={() => onToggleACMode(false)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all ${
-              !isACMode
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all ${!isACMode
                 ? "bg-primary text-primary-foreground"
                 : "bg-secondary text-muted-foreground hover:text-foreground"
-            }`}
+              }`}
           >
             <Zap className="w-4 h-4" />
             <span className="font-medium">DC</span>
           </button>
           <button
             onClick={() => onToggleACMode(true)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all ${
-              isACMode
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all ${isACMode
                 ? "bg-primary text-primary-foreground"
                 : "bg-secondary text-muted-foreground hover:text-foreground"
-            }`}
+              }`}
           >
             <Activity className="w-4 h-4" />
             <span className="font-medium">AC</span>
           </button>
         </div>
-        
-        {isACMode && (
+
+        {/* Sliders Group */}
+        <div className="flex flex-wrap items-center gap-6 flex-1 justify-end">
           <div className="flex items-center gap-3">
-            <Label className="text-sm text-muted-foreground">Frequency:</Label>
+            <Label className="text-sm text-muted-foreground whitespace-nowrap">Voltage (V):</Label>
             <Slider
-              value={[frequency]}
-              onValueChange={(v) => onFrequencyChange(v[0])}
-              min={0.5}
-              max={3}
-              step={0.1}
+              value={[voltage]}
+              onValueChange={(v) => onVoltageChange(v[0])}
+              min={1}
+              max={20}
+              step={1}
               className="w-32"
             />
-            <span className="text-sm font-mono text-foreground w-12">{frequency.toFixed(1)} Hz</span>
+            <span className="text-sm font-mono text-foreground w-8 text-right">{voltage}</span>
           </div>
-        )}
+
+          <div className="flex items-center gap-3">
+            <Label className="text-sm text-muted-foreground whitespace-nowrap">Resistance (Ω):</Label>
+            <Slider
+              value={[resistance]}
+              onValueChange={(v) => onResistanceChange(v[0])}
+              min={1}
+              max={20}
+              step={1}
+              className="w-32"
+            />
+            <span className="text-sm font-mono text-foreground w-8 text-right">{resistance}</span>
+          </div>
+
+          {isACMode && (
+            <div className="flex items-center gap-3">
+              <Label className="text-sm text-muted-foreground whitespace-nowrap">Freq (Hz):</Label>
+              <Slider
+                value={[frequency]}
+                onValueChange={(v) => onFrequencyChange(v[0])}
+                min={0.1}
+                max={3}
+                step={0.1}
+                className="w-32"
+              />
+              <span className="text-sm font-mono text-foreground w-12 text-right">{frequency.toFixed(1)}</span>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Field Toggles */}
-      <div className="flex flex-wrap gap-6">
+      <div className="flex flex-wrap gap-6 pt-1">
         <div className="flex items-center gap-3">
           <Switch
             id="electric"

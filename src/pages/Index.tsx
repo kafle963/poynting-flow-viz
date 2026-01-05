@@ -9,6 +9,8 @@ const Index = () => {
   const [showPoynting, setShowPoynting] = useState(true);
   const [isACMode, setIsACMode] = useState(false);
   const [frequency, setFrequency] = useState(1);
+  const [voltage, setVoltage] = useState(10);
+  const [resistance, setResistance] = useState(5);
 
   return (
     <div className="min-h-screen bg-background p-4 md:p-8">
@@ -28,11 +30,15 @@ const Index = () => {
           showPoynting={showPoynting}
           isACMode={isACMode}
           frequency={frequency}
+          voltage={voltage}
+          resistance={resistance}
           onToggleElectric={setShowElectric}
           onToggleMagnetic={setShowMagnetic}
           onTogglePoynting={setShowPoynting}
           onToggleACMode={setIsACMode}
           onFrequencyChange={setFrequency}
+          onVoltageChange={setVoltage}
+          onResistanceChange={setResistance}
         />
 
         <div className="bg-card rounded-xl border border-border overflow-hidden" style={{ height: "500px" }}>
@@ -42,6 +48,8 @@ const Index = () => {
             showPoynting={showPoynting}
             isACMode={isACMode}
             frequency={frequency}
+            voltage={voltage}
+            resistance={resistance}
           />
         </div>
 
